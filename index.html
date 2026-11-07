@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ロール計算</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* Layout: 1カラムの現場用計算機。入力(mm)を上、結果(dm²・kgf)を大きく下に置く */
+:root {
+  --bg: #eceff1;
+  --surface: #ffffff;
+  --fg: #182026;
+  --muted: #5a6872;
+  --line: #ccd4d9;
+  --accent: #0b6a86;
+  --result-bg: #0f2f3a;
+  --result-fg: #f2fafc;
+  --result-muted: #9fc3cf;
+  --font-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101518;
+    --surface: #182025;
+    --fg: #e5ebee;
+    --muted: #93a1a9;
+    --line: #2b363c;
+    --accent: #5cc2dd;
+    --result-bg: #0b2630;
+    --result-fg: #f2fafc;
+    --result-muted: #8fb7c4;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101518;
+  --surface: #182025;
+  --fg: #e5ebee;
+  --muted: #93a1a9;
+  --line: #2b363c;
+  --accent: #5cc2dd;
+  --result-bg: #0b2630;
+  --result-fg: #f2fafc;
+  --result-muted: #8fb7c4;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+header { display: flex; flex-direction: column; gap: 2px; }
+.kicker { font-size: 12px; letter-spacing: 0.12em; color: var(--muted); }
+h1 { margin: 0; font-size: 24px; line-height: 1.3; text-wrap: balance; }
+
+.inputs {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 14px; font-weight: 500; }
+.field .hint { font-size: 12px; color: var(--muted); }
+.control { display: flex; align-items: stretch; }
+.control input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-num);
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  padding: 8px 12px;
+  font-variant-numeric: tabular-nums;
+}
+.control .unit {
+  display: flex;
+  align-items: center;
+  min-width: 56px;
+  justify-content: center;
+  font-family: var(--font-num);
+  font-size: 15px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 0 6px 6px 0;
+  padding: 0 10px;
+}
+.control input:focus-visible { outline: 3px solid var(--accent); outline-offset: -1px; }
+.row-sg .control input { font-size: 20px; }
+
+.results {
+  background: var(--result-bg);
+  color: var(--result-fg);
+  border-radius: 8px;
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+}
+.result { display: flex; flex-direction: column; gap: 0; padding: 14px 0; }
+.result + .result { border-top: 1px solid rgba(159, 195, 207, 0.25); }
+.result .name { font-size: 13px; color: var(--result-muted); letter-spacing: 0.06em; }
+.result .value-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.result .value {
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 40px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.result .unit { font-family: var(--font-num); font-size: 18px; color: var(--result-muted); }
+
+.notes { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+.notes p { margin: 0; }
+.notes code { font-family: var(--font-num); font-size: 12px; color: var(--fg); }
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+</style>
+</head>
+<body>
+
+<main>
+  <header>
+    <span class="kicker">クロムめっき 大型ロール</span>
+    <h1>ロール計算</h1>
+  </header>
+
+  <section class="inputs" aria-label="入力">
+    <div class="field">
+      <label for="dia">ロール直径</label>
+      <div class="control">
+        <input id="dia" type="text" inputmode="decimal" autocomplete="off" value="250">
+        <span class="unit">mm</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="len">ロール胴長（めっき面の長さ）</label>
+      <div class="control">
+        <input id="len" type="text" inputmode="decimal" autocomplete="off" value="1200">
+        <span class="unit">mm</span>
+      </div>
+      <span class="hint">最初に入っている数字は例です。上書きして使ってください。</span>
+    </div>
+    <div class="field row-sg">
+      <label for="sg">めっき液の比重</label>
+      <div class="control">
+        <input id="sg" type="text" inputmode="decimal" autocomplete="off" value="1.2">
+        <span class="unit">比重</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="results" aria-label="計算結果" aria-live="polite">
+    <div class="result">
+      <span class="name">表面積（外周のみ）</span>
+      <div class="value-line"><span class="value" id="area">—</span><span class="unit">dm²</span></div>
+    </div>
+    <div class="result">
+      <span class="name">浮力</span>
+      <div class="value-line"><span class="value" id="buoy">—</span><span class="unit">kgf</span></div>
+    </div>
+  </section>
+
+  <section class="notes">
+    <p>表面積 = <code>直径 × π × 胴長</code>（端面は含みません）</p>
+    <p>浮力 = <code>半径² × π × 胴長 × 比重</code>（胴部が全部液に浸かる場合。軸部は含みません）</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  var dia = document.getElementById('dia');
+  var len = document.getElementById('len');
+  var sg = document.getElementById('sg');
+  var area = document.getElementById('area');
+  var buoy = document.getElementById('buoy');
+
+  function num(el) {
+    var v = parseFloat(String(el.value).replace(',', '.'));
+    return isFinite(v) && v > 0 ? v : null;
+  }
+  function fmt(x) {
+    return x.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function calc() {
+    var d = num(dia), l = num(len), s = num(sg);
+    if (d === null || l === null) {
+      area.textContent = '—';
+      buoy.textContent = '—';
+      return;
+    }
+    // mm → dm: 100mm = 1dm
+    var dDm = d / 100, lDm = l / 100;
+    area.textContent = fmt(Math.PI * dDm * lDm);
+    if (s === null) {
+      buoy.textContent = '—';
+    } else {
+      var r = dDm / 2;
+      // dm³ = L、比重を掛けて kgf
+      buoy.textContent = fmt(Math.PI * r * r * lDm * s);
+    }
+  }
+  [dia, len, sg].forEach(function (el) { el.addEventListener('input', calc); });
+  calc();
+})();
+</script>
+
+</body>
+</html>
